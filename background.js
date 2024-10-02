@@ -10,8 +10,9 @@ const loadMutedDomains = async () => {
   try {
     const result = await browser.storage.local.get('mutedDomains');
     mutedDomains = result.mutedDomains || [];
+    console.log("Loaded muted domains:", mutedDomains);
   } catch (error) {
-    console.log(`Error loading muted domains: ${error}`);
+    console.error(`Error loading muted domains: ${error}`);
   }
 };
 
@@ -19,105 +20,126 @@ const loadMutedDomains = async () => {
 const saveMutedDomains = async () => {
   try {
     await browser.storage.local.set({ mutedDomains });
+    console.log("Saved muted domains:", mutedDomains);
   } catch (error) {
-    console.log(`Error saving muted domains: ${error}`);
+    console.error(`Error saving muted domains: ${error}`);
   }
 };
 
-const toggleMuteSite = async (selectedTab = null) => {
+const toggleMuteSite = async (tab) => {
   try {
-    if (!selectedTab) {
-      const activeTabs = await browser.tabs.query({active: true, currentWindow: true});
-      selectedTab = activeTabs[0];
+    const domainName = new URL(tab.url).hostname;
+    const isCurrentlyMuted = mutedDomains.includes(domainName);
+    
+    const tabs = await browser.tabs.query({ url: `*://*.${domainName}/*` });
+    
+    for (let t of tabs) {
+      await browser.tabs.update(t.id, { muted: !isCurrentlyMuted });
     }
-    const isSelectedTabMuted = selectedTab.mutedInfo.muted;
-    const domainName = new URL(selectedTab.url).hostname;
-    const tabs = await browser.tabs.query({
-      url: `*://*.${domainName}/*`
-    });
-    tabs.forEach((tab) => {
-      browser.tabs.update(tab.id, {
-        muted: !isSelectedTabMuted
-      });
-    });
-    const domainIndex = mutedDomains.indexOf(domainName);
-    if (!isSelectedTabMuted && domainIndex == -1) {
+
+    if (!isCurrentlyMuted) {
       mutedDomains.push(domainName);
-    } else if (domainIndex > -1) {
-      mutedDomains.splice(domainIndex, 1);
+    } else {
+      mutedDomains = mutedDomains.filter(d => d !== domainName);
     }
-    await saveMutedDomains(); // Save the updated list
+
+    await saveMutedDomains();
+    await updatePageAction(tab);
+
+    console.log(`Toggled mute for ${domainName}. New state: ${!isCurrentlyMuted}`);
   } catch (error) {
-    console.log(`Error: ${error}`);
+    console.error(`Error toggling mute: ${error}`);
   }
 };
 
-const initializePageAction = (tab) =>
-{
-	if (tab.audible) // if tab is playing media
-	{
-		const title = tab.mutedInfo.muted ? UNMUTE_TITLE : MUTE_TITLE;
-		const icon = tab.mutedInfo.muted ? UNMUTE_ICON : MUTE_ICON;
+const updatePageAction = async (tab) => {
+  try {
+    const domainName = new URL(tab.url).hostname;
+    const isMuted = mutedDomains.includes(domainName);
+    const title = isMuted ? UNMUTE_TITLE : MUTE_TITLE;
+    const icon = isMuted ? MUTE_ICON : UNMUTE_ICON;
 
-		browser.pageAction.setTitle({tabId: tab.id, title: title});
-		browser.pageAction.setIcon({tabId: tab.id, path: icon});
-		browser.pageAction.show(tab.id);
-	}
-}
+    await browser.pageAction.setTitle({ tabId: tab.id, title: title });
+    await browser.pageAction.setIcon({ tabId: tab.id, path: icon });
+    await browser.pageAction.show(tab.id);
 
-const menuCreated = () =>
-{
-	if (browser.runtime.lastError)
-	  console.log("Error creating menu item:", browser.runtime.lastError);
-}
+    console.log(`Updated page action for ${domainName}. Muted: ${isMuted}`);
+  } catch (error) {
+    console.error(`Error updating page action: ${error}`);
+  }
+};
 
-// initialize for all tabs
-browser.tabs.query({}).then((tabs) =>
-{
-	for (let tab of tabs)
-	{
-		initializePageAction(tab);
-	}
-});
+const createContextMenu = () => {
+  browser.menus.create({
+    id: CUSTOM_MENU_ID,
+    title: MUTE_TITLE,
+    contexts: ["tab"]
+  }, () => {
+    if (browser.runtime.lastError) {
+      console.error("Error creating menu item:", browser.runtime.lastError);
+    } else {
+      console.log("Context menu created successfully");
+    }
+  });
+};
 
-// update page action on each tab update
-browser.tabs.onUpdated.addListener((id, changeInfo, tab) =>
-{
-	initializePageAction(tab);
+const updateContextMenu = async (info, tab) => {
+  try {
+    const domainName = new URL(tab.url).hostname;
+    const isMuted = mutedDomains.includes(domainName);
+    const title = isMuted ? UNMUTE_TITLE : MUTE_TITLE;
+    await browser.menus.update(CUSTOM_MENU_ID, { title: title });
+    await browser.menus.refresh();
+    console.log(`Updated context menu for ${domainName}. Muted: ${isMuted}`);
+  } catch (error) {
+    console.error(`Error updating context menu: ${error}`);
+  }
+};
 
-	if (changeInfo?.url) // url has changed
-	{
-		// mute domain if it's on muted list
-		const domainName = new URL(tab.url).hostname;
-		if (mutedDomains.includes(domainName))
-		{
-			browser.tabs.update(tab.id, {
-				muted: true
-			});
-		}
-	}
-});
+const handleTabUpdated = async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    await updatePageAction(tab);
+    const domainName = new URL(tab.url).hostname;
+    if (mutedDomains.includes(domainName)) {
+      await browser.tabs.update(tab.id, { muted: true });
+      console.log(`Muted tab for ${domainName} due to stored preference`);
+    }
+  }
+};
 
-// mute/unmute site when the page action is clicked
-browser.pageAction.onClicked.addListener(toggleMuteSite);
+const initialize = async () => {
+  await loadMutedDomains();
+  
+  const tabs = await browser.tabs.query({});
+  for (let tab of tabs) {
+    await updatePageAction(tab);
+    const domainName = new URL(tab.url).hostname;
+    if (mutedDomains.includes(domainName)) {
+      await browser.tabs.update(tab.id, { muted: true });
+      console.log(`Muted tab for ${domainName} during initialization`);
+    }
+  }
 
-// create custom item for tab menu
-browser.menus.create({
-	id: CUSTOM_MENU_ID,
-	title: MUTE_TITLE,
-	contexts: ["tab"]
-}, menuCreated);
+  createContextMenu();
 
-// update menu item's title
-browser.menus.onShown.addListener(async (info, tab) =>
-{
-	const title = tab.mutedInfo.muted ? UNMUTE_TITLE : MUTE_TITLE;
-	browser.menus.update(CUSTOM_MENU_ID, {title: title});
-	browser.menus.refresh();
-});
+  browser.tabs.onUpdated.addListener(handleTabUpdated);
+  browser.pageAction.onClicked.addListener(toggleMuteSite);
+  browser.menus.onShown.addListener(updateContextMenu);
+  browser.menus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === CUSTOM_MENU_ID) {
+      toggleMuteSite(tab);
+    }
+  });
 
-browser.menus.onClicked.addListener((info, tab) =>
-{
-	if (info.menuItemId === CUSTOM_MENU_ID)
-		toggleMuteSite(tab);
+  console.log("Extension initialized successfully");
+};
+
+initialize();
+
+// Listen for changes in storage
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.mutedDomains) {
+    console.log("Muted domains updated in storage:", changes.mutedDomains.newValue);
+    mutedDomains = changes.mutedDomains.newValue;
+  }
 });
