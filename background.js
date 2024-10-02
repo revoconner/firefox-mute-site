@@ -3,45 +3,53 @@ const UNMUTE_ICON = "icons/unmute.svg";
 const MUTE_TITLE = "Mute Site";
 const UNMUTE_TITLE = "Unmute Site";
 const CUSTOM_MENU_ID = "mute-site";
+let mutedDomains = [];
 
-const mutedDomains = [];
+// Load muted domains from storage
+const loadMutedDomains = async () => {
+  try {
+    const result = await browser.storage.local.get('mutedDomains');
+    mutedDomains = result.mutedDomains || [];
+  } catch (error) {
+    console.log(`Error loading muted domains: ${error}`);
+  }
+};
 
-const toggleMuteSite = async (selectedTab = null) =>
-{
-	try
-	{
-		if (!selectedTab)
-		{
-			const activeTabs = await browser.tabs.query({active: true, currentWindow: true});
-			selectedTab = activeTabs[0];
-		}
+// Save muted domains to storage
+const saveMutedDomains = async () => {
+  try {
+    await browser.storage.local.set({ mutedDomains });
+  } catch (error) {
+    console.log(`Error saving muted domains: ${error}`);
+  }
+};
 
-		const isSelectedTabMuted = selectedTab.mutedInfo.muted;
-		const domainName = new URL(selectedTab.url).hostname;
-
-		const tabs = await browser.tabs.query({
-			url: `*://*.${domainName}/*`
-		});
-
-		tabs.forEach((tab) =>
-		{
-			browser.tabs.update(tab.id, {
-				muted: !isSelectedTabMuted
-			});
-		});
-
-		const domainIndex = mutedDomains.indexOf(domainName);
-		if (!isSelectedTabMuted && domainIndex == -1) // this domain just got muted, so add it to the list
-		{
-			mutedDomains.push(domainName);
-		} else if (domainIndex > -1) // it just got unmuted, so remove from the list
-		{
-			mutedDomains.splice(domainIndex, 1);
-		}
-	} catch (error)
-	{
-		console.log(`Error: ${error}`);
-	}
+const toggleMuteSite = async (selectedTab = null) => {
+  try {
+    if (!selectedTab) {
+      const activeTabs = await browser.tabs.query({active: true, currentWindow: true});
+      selectedTab = activeTabs[0];
+    }
+    const isSelectedTabMuted = selectedTab.mutedInfo.muted;
+    const domainName = new URL(selectedTab.url).hostname;
+    const tabs = await browser.tabs.query({
+      url: `*://*.${domainName}/*`
+    });
+    tabs.forEach((tab) => {
+      browser.tabs.update(tab.id, {
+        muted: !isSelectedTabMuted
+      });
+    });
+    const domainIndex = mutedDomains.indexOf(domainName);
+    if (!isSelectedTabMuted && domainIndex == -1) {
+      mutedDomains.push(domainName);
+    } else if (domainIndex > -1) {
+      mutedDomains.splice(domainIndex, 1);
+    }
+    await saveMutedDomains(); // Save the updated list
+  } catch (error) {
+    console.log(`Error: ${error}`);
+  }
 };
 
 const initializePageAction = (tab) =>
