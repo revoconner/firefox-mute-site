@@ -1,34 +1,29 @@
 {
-	"manifest_version": 2,
-	"name": "Mute Domains Unitl Unmuted",
-	"version": "1.0",
-	"description": "Allows to instantly mute/unmute all tabs from a website. Based on pkrasicki work",
-	"browser_specific_settings": {
-		"gecko": {
-		  "id": "example@gmail.com",
-		  "strict_min_version": "120.0"
-		}
-	  },
-	  	  
-	"icons": {
-		"48": "icons/unmute.svg",
-		"96": "icons/unmute.svg"
-	},
-
-	"permissions": [
-		"tabs",
-		"menus",
-		"storage"
-	],
-
-	"page_action": {
-		"default_icon": "icons/unmute.svg",
-		"default_title": "Toggle Mute Domains"
-	},
-
-	"background": {
-		"scripts": ["background.js"]
-	}
+    "manifest_version": 2,
+    "name": "Mute Domain",
+    "version": "1.3.0",
+    "description": "Allows to instantly mute/unmute website.",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "aaa@gmail.com",
+            "strict_min_version": "120.0"
+        }
+    },
+    "icons": {
+        "48": "icons/unmute.svg",
+        "96": "icons/unmute.svg"
+    },
+    "permissions": [
+        "tabs",
+        "menus",
+        "storage"
+    ],
+    "browser_action": {
+        "default_icon": "icons/unmute.svg",
+        "default_title": "Muted Websites",
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "scripts": ["background.js"]
+    }
 }
-
-  
