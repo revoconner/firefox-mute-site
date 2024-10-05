@@ -14,3 +14,5 @@ This is a Firefox extension that allows to instantly mute/unmute all tabs from a
 
 
 Icons come from [Font Awesome](https://fontawesome.com) - CC BY 4.0 license.
+
+### Original work from https://github.com/pkrasicki/firefox-mute-site 
