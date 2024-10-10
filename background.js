@@ -5,7 +5,6 @@ const UNMUTE_TITLE = "Unmute Site";
 const CUSTOM_MENU_ID = "mute-site";
 let mutedDomains = [];
 
-// Load muted domains from storage
 const loadMutedDomains = async () => {
     try {
         const result = await browser.storage.local.get('mutedDomains');
@@ -16,7 +15,6 @@ const loadMutedDomains = async () => {
     }
 };
 
-// Save muted domains to storage
 const saveMutedDomains = async () => {
     try {
         await browser.storage.local.set({ mutedDomains });
@@ -47,11 +45,11 @@ const toggleMuteSite = async (tab) => {
         await updateBrowserAction(tab);
 
         console.log(`Toggled mute for ${domainName}. New state: ${!isCurrentlyMuted}`);
-        console.log("Current muted domains:", mutedDomains);
     } catch (error) {
         console.error(`Error toggling mute: ${error}`);
     }
 };
+
 const updateBrowserAction = async (tab) => {
     try {
         const domainName = new URL(tab.url).hostname;
@@ -99,10 +97,29 @@ const handleTabUpdated = async (tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
         await updateBrowserAction(tab);
         const domainName = new URL(tab.url).hostname;
-        if (mutedDomains.includes(domainName)) {
+        const shouldBeMuted = mutedDomains.includes(domainName);
+        
+        if (shouldBeMuted && !tab.mutedInfo.muted) {
             await browser.tabs.update(tab.id, { muted: true });
             console.log(`Muted tab for ${domainName} due to stored preference`);
+        } else if (!shouldBeMuted && tab.mutedInfo.muted) {
+            await browser.tabs.update(tab.id, { muted: false });
+            console.log(`Unmuted tab for ${domainName} as it's not in muted list`);
         }
+    }
+};
+
+const handleTabMuted = async (tabId, info) => {
+    const tab = await browser.tabs.get(tabId);
+    const domainName = new URL(tab.url).hostname;
+    const isInMutedList = mutedDomains.includes(domainName);
+
+    if (info.muted && !isInMutedList) {
+        await browser.tabs.update(tabId, { muted: false });
+        console.log(`Unmuted tab ${tabId} (${domainName}) as it's not in our muted list`);
+    } else if (!info.muted && isInMutedList) {
+        await browser.tabs.update(tabId, { muted: true });
+        console.log(`Muted tab ${tabId} (${domainName}) as it's in our muted list`);
     }
 };
 
@@ -116,6 +133,9 @@ const initialize = async () => {
         if (mutedDomains.includes(domainName)) {
             await browser.tabs.update(tab.id, { muted: true });
             console.log(`Muted tab for ${domainName} during initialization`);
+        } else if (tab.mutedInfo.muted) {
+            await browser.tabs.update(tab.id, { muted: false });
+            console.log(`Unmuted tab for ${domainName} during initialization as it's not in muted list`);
         }
     }
 
@@ -130,10 +150,11 @@ const initialize = async () => {
         }
     });
 
+    browser.tabs.onMuted.addListener(handleTabMuted);
+
     console.log("Extension initialized successfully");
 };
 
-// Listen for changes in storage
 browser.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.mutedDomains) {
         console.log("Muted domains updated in storage:", changes.mutedDomains.newValue);
@@ -141,5 +162,4 @@ browser.storage.onChanged.addListener((changes, area) => {
     }
 });
 
-// Start the extension
 initialize();
