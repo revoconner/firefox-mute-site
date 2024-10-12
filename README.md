@@ -11,12 +11,17 @@ This is a Firefox extension that allows to instantly mute/unmute all tabs from a
 
 ![image](https://github.com/user-attachments/assets/017d395a-9317-4da8-b1c0-811e37b78056)
 
+
+Original work from https://github.com/pkrasicki/firefox-mute-site 
+
 ## Changelog
 ### v1.3.0
 Added a list of muted domains
 ### v1.3.1
 Bug fix - Muted website tabs remain muted when a new website is loaded in the same tab. This has been fixed. 
+### v1.4.0
+1. Fixed icon width
+2. Changed icon color with outline to be better viewed in dark themes.
+3. Fixed wrong icon seen on websites with mute and unmute reversed
 
-Icons come from [Font Awesome](https://fontawesome.com) - CC BY 4.0 license.
 
-### Original work from https://github.com/pkrasicki/firefox-mute-site 
